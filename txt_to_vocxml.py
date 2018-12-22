@@ -15,31 +15,40 @@ class VocXML:
             sys.exit(0)
 
     def __load_classes_info(self, json_path):
-        with open(json_path, encoding='utf-8') as f:  # for the not unicode string
+        with open(json_path,"rb") as f:  # for the not unicode string
             str_data = f.read()
             if str_data != '':
                 self.classes = json.loads(str_data)
                 return True
             return False
 
-    def __load_object_info(self, txt_path):
+    def __load_object_info(self, txt_path, img_shape):
+        H,W,C = img_shape
         objs = []
-        with open(txt_path, encoding='utf-8') as f:
-            lines = f.read().splitlines()
-            for line in lines:
-                splies = line.split(" ")
+        with open(txt_path, "rb") as f:
+            for line in f:
+                splies = line.strip().split(" ")
                 if len(splies) != 5:
                     sys.stderr.write("Error on reading the txt file{}.\n".format(txt_path))
                     sys.exit(0)
                     return False
                 else:
+                    cls,cx,cy,w,h = map(lambda x:float(x), splies)
+                    x0 = cx - w/2
+                    y0 = cy - h/2
+                    x1 = x0 + w
+                    y1 = y0 + h
+                    x0,x1 = x0*W, x1*W
+                    y0,y1 = y0*H, y1*H
+
+                    cls = int(cls) + 1 #no background
                     points = [
-                        (int(splies[0]), int(splies[1])),
-                        (int(splies[2]), int(splies[3]))
+                        (int(x0), int(y0)),
+                        (int(x1), int(y1))
                     ]
                     objs.append({
                         "bndbox": self.__points2BndBox(points),
-                        "label": self.classes[int(splies[4])]})
+                        "label": self.classes[int(cls)]})
         return objs
 
     def __points2BndBox(self, points):
@@ -69,7 +78,7 @@ class VocXML:
         txt_path = base + ".txt"  # annotation file
         xml_path = base + ".xml"  # result file
 
-        image = cv2.imread(imagePath)
+        image = cv2.imread(imagePath,1)
         if image is not None and os.path.exists(txt_path):
             verified = True
             imageShape = image.shape[:]
@@ -82,7 +91,7 @@ class VocXML:
                                  localImgPath=imagePath, verified=verified)
 
         # load the object info(border and class) from the txt file
-        objs = self.__load_object_info(txt_path=txt_path)
+        objs = self.__load_object_info(txt_path=txt_path, img_shape=image.shape)
 
         if bShow and verified:
             for obj in objs:
@@ -110,9 +119,5 @@ class VocXML:
 
 if __name__ == '__main__':
     vx = VocXML(classes_path="./data/classes.json")
+    vx.scan_dir(image_dir='/home/data/traffic-objects/JPEGImages/')
 
-    for directory in ['train', 'test']:
-        vx.scan_dir(image_dir='./data/images/{}'.format(directory))
-
-    # prepare the folers "data/train", "data/test" and move the text and images to the above directories
-    # and run with typing ```python txt_to_vocxml.py``` on terminal
